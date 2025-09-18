@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "ReadQR",
-    "slug": "ReadQR",
-    "version": "1.0.0",
+    "name": "AIFA Pass Evolución",
+    "slug": "aifa-pass",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -10,20 +10,80 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "buildNumber": "2.0.0",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Victum Mantenimiento requiere utilizar la Cámara del Dispositivo para poder subir evidencias",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Para que Victum Mantenimiento pueda ofrecer un mejor servicio se requiere rastrear de forma transparente su ubicación hasta que usted lo requiera",
+        "NSLocationAlwaysUsageDescription": "Victum Mantenimiento requiere utilizar la Ubicación del Dispositivo para comprobar los datos de los elementos",
+        "NSLocationWhenInUseUsageDescription": "Victum Mantenimiento requiere utilizar la Ubicación del Dispositivo en segundo plano"
+      }
     },
     "android": {
+      "versionCode": 200,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "VIBRATE",
+        "FOREGROUND_SERVICE",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
+      "package": "com.ucm_23.aifapass"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-sqlite"
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/splash-icon.png",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#FFFFFF"
+          },
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone",
+          "recordAudioAndroid": true
+        }
+      ],
+      "expo-audio",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ddaadbe0-f120-444f-9bdf-d76f1b477f9a"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "owner": "ucm_23",
+    "scheme": "cano",
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/ddaadbe0-f120-444f-9bdf-d76f1b477f9a"
     }
   }
 }
