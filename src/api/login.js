@@ -1,159 +1,216 @@
 
 import * as SQLite from 'expo-sqlite';
 import * as Network from 'expo-network';
-import { dbName, tablePlaces } from '../lib/__init_tables__';
-import { SUPABASE_KEY, SUPABASE_URL } from './check_flight';
+import { dbName, tableUsers } from '../lib/__init_tables__';
 import axios from 'axios';
 import { attributesStringOKOKCreate, attributesStringOKOKUpdate, selectbyID, simpleSelect } from '../lib/main';
-import { getKnex } from '../lib/knexConfig';
+import Fetcher from '../lib/Fetcher';
 
-export const login = async ({ id, dealership }) => {
+import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 
-    let fetch = { status: 0 };
+export const saveData = async (key, value) => {
+    await SecureStore.setItemAsync(key, JSON.stringify(value));
+}
 
+export const getData = async (key) => {
+    let result = await SecureStore.getItemAsync(key);
+    if (result) return JSON.parse(result);
+}
+
+export const login = async ({ id, dealership, email, password }) => {
+
+    let fetch = { status: 0, data: null };
     try {
-        const db = await SQLite.openDatabaseAsync(dbName);
-        console.log("🚀 ~ login ~ db:", db)
-        //const knex = getKnex()
         const data = {
-            _dealership: dealership,
-            _id: id,
+            email: email.trim(),
+            password: password?.trim()
         };
+        let response = await Fetcher({
+            method: 'POST',
+            url: 'auth/login',
+            data: JSON.stringify(data)
+        });
 
-        const response = await axios.post(
-            `${SUPABASE_URL}/rest/v1/rpc/get_place_by_id_and_dealership`,
-            data,
-            {
-                headers: {
-                    apikey: SUPABASE_KEY,
-                    Authorization: `Bearer ${SUPABASE_KEY}`,
-                    "Content-Type": "application/json",
-                },
-            }
-        );
+        //Alert.alert('Response Status: ', JSON.stringify(response, null, 4));
 
         if (response?.status === 200) {
-            const response_data = response?.data[0];
-            console.log("🚀 ~ login ~ response_data:", response_data);
-
-            const placeId = response_data?.id;
-
-            const row = await db.getFirstAsync(
-                `SELECT * FROM places;`,
-                []
-            );
-            console.log("🚀 ~ login ~ row:", row)
-
-            // Buscar si ya existe en SQLite
-            const selectQuery = `SELECT * FROM ${tablePlaces} WHERE id = ?;`;
-            console.log("🚀 ~ login ~ selectQuery:", selectQuery, [placeId]);
-
-            console.log("DB abierta:", db);
-
-            const finder_user = await db.getAllAsync(selectQuery, placeId);
-            console.log("🚀 ~ login ~ finder_user:", finder_user);
-
-            if (!finder_user || finder_user.length === 0) {
-                // INSERTAR nuevo registro
-                const insertQuery = `
-                    INSERT INTO ${tablePlaces} 
-                    (id, place, dealership, last_login, logged) 
-                    VALUES 
-                    (?, ?, ?, ?, ?);
-                `;
-
-                const values = [
-                    placeId,
-                    response_data.name,
-                    response_data.dealership,
-                    new Date().toISOString(),
-                    1 // logged = true (1)
-                ];
-
-                console.log("🚀 ~ login ~ insertQuery:", insertQuery, values);
-
-                const result = await db.runAsync(insertQuery, values);
-                console.log(
-                    `ID ${tablePlaces} INSERTADO: `,
-                    result?.lastInsertRowId,
-                    "CAMBIOS: ",
-                    result?.changes
-                );
-            } else {
-                // ACTUALIZAR registro existente
-                const updateQuery = `
-                    UPDATE ${tablePlaces} 
-                    SET last_login = ?, 
-                    logged = ? 
-                    WHERE id = ?;
-                `;
-
-                const values = [
-                    new Date().toISOString(), // last_login
-                    1, // logged = true (1)
-                    placeId // id for WHERE clause
-                ];
-
-                console.log("🚀 ~ login ~ updateQuery:", updateQuery, values);
-
-                const result = await db.runAsync(updateQuery, values);
-                console.log(
-                    "ID ACTUALIZADO: ",
-                    result?.lastInsertRowId,
-                    "CAMBIOS: ",
-                    result?.changes
-                );
-            }
-
             fetch.status = 1;
+            fetch.data = response?.data
         }
     } catch (error) {
         console.error("catch login ~ error", error);
+        if (error.message) {
+            console.error("Error message:", error.message);
+        }
+    } finally {
+        return fetch;
+    }
+};
+
+export const saveDataLogin = async ({ response_data, lane, direction, email, password, login }) => {
+    //console.log("🚀 ~ saveDataLogin ~ login:", login)
+
+    let fetch = { status: 0, data: null };
+    let db = null;
+
+    try {
+        db = await SQLite.openDatabaseAsync(dbName);
+
+        //await saveData("local", { response_data, lane, direction, email, password, login })
+
+        //console.log("🚀 ~ login ~ db:", db)
+        const data = {
+            //_dealership: dealership,
+            //_id: id,
+            email: email.trim(),
+            password: password?.trim()
+        };
+
+        const id_ = response_data?.user?.id;
+
+        const selectQuery = `SELECT * FROM ${tableUsers} WHERE id_ = ?;`;
+        console.log("🚀 ~ login ~ selectQuery:", selectQuery, [id_]);
+
+        console.log("DB abierta:", db);
+
+        const finder_user = await db.getAllAsync(selectQuery, id_);
+        console.log("🚀 ~ login ~ finder_user:", finder_user);
+
+        if (!finder_user || finder_user.length === 0) {
+            let insertQuery = ``;
+            let values = null;
+            if (login) {
+                insertQuery = `INSERT INTO ${tableUsers} 
+                    (id_, place_id, email, name, role, lanes, token, password) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);`;
+                values = [
+                    id_,
+                    response_data?.user?.place_id,
+                    response_data?.user?.email,
+                    response_data?.user?.name,
+                    response_data?.user?.role,
+                    JSON.stringify(response_data?.lanes),
+                    response_data?.token,
+                    data.password
+                ];
+            } else {
+                insertQuery = `INSERT INTO ${tableUsers} 
+                    (id_, place_id, email, name, role, lanes, token, password, last_login, logged, lane_active, direction_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`;
+                values = [
+                    id_,
+                    response_data?.user?.place_id,
+                    response_data?.user?.email,
+                    response_data?.user?.name,
+                    response_data?.user?.role,
+                    JSON.stringify(response_data?.lanes),
+                    response_data?.token,
+                    data.password,
+                    new Date().toISOString(),
+                    1,
+                    lane, 
+                    direction
+                ];
+            }
+            console.log("🚀 ~ login ~ insertQuery:", insertQuery, values);
+            const result = await db.runAsync(insertQuery, values);
+            console.log(
+                `ID ${tableUsers} INSERTADO: `, result?.lastInsertRowId,
+                "CAMBIOS: ", result?.changes
+            );
+            fetch.status = 1
+        } else {
+            let updateQuery = ``;
+            let values = null;
+            if (login) {
+                updateQuery = `UPDATE ${tableUsers} 
+                    SET lanes = ?, token = ?, password = ?
+                    WHERE id_ = ?;`;
+                values = [
+                    JSON.stringify(response_data?.lanes),
+                    response_data?.token,
+                    data?.password,
+                    id_
+                ];
+            } else {
+                updateQuery = `UPDATE ${tableUsers} 
+                    SET lanes = ?, token = ?, password = ?, last_login = ?, logged = ?, lane_active = ?, direction_active = ?
+                    WHERE id_ = ?;`;
+                values = [
+                    JSON.stringify(response_data?.lanes),
+                    response_data?.token,
+                    data?.password,
+                    new Date().toISOString(),
+                    1,
+                    lane,
+                    direction,
+                    id_
+                ];
+            }
+            console.log("🚀 ~ login ~ updateQuery:", updateQuery, values);
+            const result = await db.runAsync(updateQuery, values);
+            console.log(
+                "ID ACTUALIZADO: ", result?.lastInsertRowId,
+                "CAMBIOS: ", result?.changes
+            );
+            fetch.status = 1
+        }
+
+    } catch (error) {
+        console.error("catch dataSaveLogin ~ error", error);
         // Agregar más detalles del error
         if (error.message) {
             console.error("Error message:", error.message);
         }
     } finally {
         //await db.closeAsync(); // Cerrar la conexión
+        if (db) await db.closeAsync();
         return fetch;
     }
 };
 
-export const logout = async ({ id }) => {
+export const logout = async ({ id_, id }) => {
     const response = {};
+    let db = null;
     try {
-        const db = await SQLite.openDatabaseAsync(dbName);
 
+        db = await SQLite.openDatabaseAsync(dbName);
         console.log("🚀 ~ logout ~ db:", db);
+
+        const tableCheck = await db.getAllAsync(
+            `SELECT name FROM sqlite_master WHERE type='table' AND name=?;`,
+            [tableUsers]
+        );
+        console.log("🚀 ~ Table exists:", tableCheck);
+
+        if (tableCheck.length === 0) {
+            throw new Error(`Table ${tableUsers} does not exist`);
+        }
+
+        console.log("🚀 ~ logout ~ id_:", id_);
         console.log("🚀 ~ logout ~ id:", id);
-        console.log("🚀 ~ logout ~ tablePlaces:", tablePlaces);
+        console.log("🚀 ~ logout ~ tableUsers:", tableUsers);
 
-        /*await db.execAsync(`
-        CREATE TABLE IF NOT EXISTS places (
-            id INTEGER PRIMARY KEY,
-            last_login TEXT,
-            logged INTEGER
-        );`);*/
+        const deleteQuery = `DELETE FROM ${tableUsers};`;
+        console.log("🚀 ~ logout ~ deleteQuery:", deleteQuery);
 
-
-        const row = await db.getFirstAsync(
-            `SELECT * FROM places;`,
-            []
-        );
-        console.log("🚀 Row antes del UPDATE:", row);
-
-        const result = await db.runAsync(
-            `UPDATE ${tablePlaces} SET last_login = ?, logged = ? WHERE id = ?;`,
-            [new Date().toISOString(), 0, id]
-        );
-
-        console.log("🚀 ~ logout ~ result:", result);
+        await db.runAsync(deleteQuery);
+        console.log("🚀 ~ Tabla vaciada exitosamente");
 
         response.status = true;
     } catch (error) {
         console.error("🚀 ~ logout ~ error:", error);
         response.status = false;
+        response.error = error.message;
     } finally {
+        if (db) {
+            try {
+                await db.closeAsync();
+            } catch (closeError) {
+                console.error("Error closing database:", closeError);
+            }
+        }
         return response;
     }
 };
@@ -162,15 +219,16 @@ export const logout = async ({ id }) => {
 
 export const useAuthentificationLogged = () => {
 
-    const login_offline = async ({ id, dealership }) => {
+    const login_offline = async ({ email, password, id_ }) => {
         const db = await SQLite.openDatabaseAsync(dbName);
         let fetch = { status: false }
         try {
-            let data = { id: id, dealership: dealership };
-
-            let condition = [{ name: "id", value: `${data?.id}` }, { name: "dealership", value: `${data?.dealership}` }];
-            let query = simpleSelect({ condition, table: tablePlaces, })
+            let data = { email, password };
+            let condition = [{ name: "email", value: `'${email}'` }, { name: "password", value: `'${password}'` }];
+            let query = simpleSelect({ condition, table: tableUsers, })
+            console.log("🚀 ~ login_offline ~ query:", query)
             const [finder_user_obj] = await db.getAllAsync(query, []);
+            console.log("🚀 ~ login_offline ~ finder_user_obj:", finder_user_obj)
 
             if (finder_user_obj) {
                 const newObj = {
@@ -181,14 +239,12 @@ export const useAuthentificationLogged = () => {
 
                 let sets = attributesStringOKOKUpdate({ obj: newObj, attributes: true, id: true })
                 let values = attributesStringOKOKUpdate({ obj: newObj, values: true, id: true })
-                query = `UPDATE ${tablePlaces} SET ${sets};`
+                query = `UPDATE ${tableUsers} SET ${sets};`
                 await db.withTransactionAsync(async () => {
                     const result = await db.runAsync(query, values);
                     console.log(result?.lastInsertRowId, result?.changes);
                     console.log('ID INSERTADO: ', result?.lastInsertRowId, 'CAMBIOS: ', result?.changes);
                 });
-
-
                 let response_data = {
                     ...finder_user_obj,
                 }
@@ -205,7 +261,7 @@ export const useAuthentificationLogged = () => {
         let fetch = { status: false }
         const db = await SQLite.openDatabaseAsync(dbName);
         try {
-            let query = `SELECT id, place, dealership, MAX(last_login) FROM ${tablePlaces} WHERE logged = 1;`
+            let query = `SELECT id, id_, place_id, logged, last_login, email, password, lanes, MAX(last_login) FROM ${tableUsers} WHERE logged = 1;`
             const user_log_last = await db.getAllAsync(query, []);
             console.log("🚀 ~ get_last_login ~ user_log_last:", user_log_last)
             if (user_log_last[0]?.id) {
@@ -213,7 +269,9 @@ export const useAuthentificationLogged = () => {
             } else console.log('No hay login')
         } catch (error) {
             console.error("get_last_login ~ error", error)
+            fetch.status = 1
         } finally {
+            if (db) await db.closeAsync();
             return fetch
         }
     }

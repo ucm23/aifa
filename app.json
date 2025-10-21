@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "AIFA Pass Evolución",
+    "name": "CONECT AIFA",
     "slug": "aifa-pass",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "2.0.0",
+      "buildNumber": "3.0.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Victum Mantenimiento requiere utilizar la Cámara del Dispositivo para poder subir evidencias",
@@ -24,10 +24,10 @@
       }
     },
     "android": {
-      "versionCode": 200,
+      "versionCode": 300,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#B6B6B6"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -37,16 +37,30 @@
         "FOREGROUND_SERVICE",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION"
+        "ACCESS_BACKGROUND_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_MEDIA_LOCATION"
       ],
-      "package": "com.ucm_23.aifapass"
+      "package": "com.ucm_23.aifapass",
+      "minSdkVersion": 28,
+      "targetSdkVersion": 31,
+      "compileSdkVersion": 31
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       [
-        "expo-sqlite"
+        "expo-sqlite",
+        {
+          "enableFTS": true,
+          "useSQLCipher": true,
+          "android": {
+            "enableFTS": false,
+            "useSQLCipher": false
+          }
+        }
       ],
       [
         "expo-splash-screen",
@@ -63,25 +77,29 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone",
-          "recordAudioAndroid": true
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
         }
       ],
-      "expo-audio",
-      "expo-secure-store"
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
+        }
+      ]
     ],
     "extra": {
       "eas": {
-        "projectId": "ddaadbe0-f120-444f-9bdf-d76f1b477f9a"
+        "projectId": "b239117d-2a02-43d4-8cbc-5ee3cff438d1"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "owner": "ucm_23",
+    "owner": "eziocano23",
     "scheme": "cano",
     "updates": {
+      "enabled": true,
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/ddaadbe0-f120-444f-9bdf-d76f1b477f9a"
     }

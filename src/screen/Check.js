@@ -1,41 +1,35 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Alert, StyleSheet, Text, Image } from 'react-native';
-import { TextInput, FAB, Button, ActivityIndicator, ProgressBar, Badge } from 'react-native-paper';
-import LoadingModal from '../components/LoadingModal';
-import { CameraView, useCameraPermissions } from "expo-camera";
-import moment from "moment";
+import { FAB, Button, ActivityIndicator } from 'react-native-paper';
 import { checkFlight } from '../api/check_flight';
 import { StatusBar } from 'expo-status-bar';
+
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import green from '../image/Check-Success.gif';
 import red from '../image/Close-Cancel.gif';
 import not from '../image/No-Connection.gif';
 
-
-function filtrarTexto(cadena) {
-    return cadena.replace(/(NLU)|./g, (match) => {
-        return match === 'NLU' ? 'NLU' : (match === '-' ? '-' : '*');
-    });
-}
-
 export default function Check({ navigation, route }) {
 
     const {
         _text,
-        _data,
-        _user,
         NLU,
-        _place
+        idCarril,
+        sentido,
+        token,
+        lane,
+        user
     } = route.params;
 
     const image = {
         1: green,
         2: red,
-        3: not
+        3: red
     }
 
-    const [count, setCount] = useState(4);
-    const [type, setType] = useState(null);
+    const place_id = parseInt(user?.user?.place_id)
+    console.log("🚀 ~ Check ~ place_id:", place_id)
 
     useEffect(() => {
         navigation.setOptions({
@@ -49,134 +43,141 @@ export default function Check({ navigation, route }) {
         console.log("🚀 ~ Check ~ route.params:", route.params)
         console.log("🚀 ~ Check ~ _text:", _text)
 
-        if (NLU) getCheckFlight(_data, _user);
+
+
+        if (NLU) getCheckFlight();
         else {
             setMessage({
-                type: 2,
-                title: 'El descuento no aplica \n para este vuelo',
-                message: '',
+                type: 901,
+                mensaje: 'No es un código QR emitido por el servicio ConectAIFA QR',
                 color: '#db2c2cff'
             })
-            setType(2)
         }
     }, []);
 
-    useEffect(() => {
-        if (count <= 0) {
-            goBack();
-            return;
-        }
+    const [mensaje, setMessage] = useState(null);
 
-        const timer = setInterval(() => {
-            setCount(prev => prev - 1);
-        }, 1000);
+    /*const resultPaint = {
+        'Usuario no encontrado': { color: "#db2c2cff", type: 3 },
+        'Usuario no tiene una plaza de cobro asignada': { color: "#db2c2cff", type: 3 },
+        'No se puede formatear con contenido': { color: "#db2c2cff", type: 3 },
+        "Código ya leído": { color: "#ea7712ff", type: 2 },
+        "Cruce válido": { color: "#13e266ff", type: 1 },
+        "No valido": { color: "#db2c2cff", type: 3 },
+        'Error al validar el vuelo': { color: "#ea7712ff", type: 2 },
+    }*/
 
-        return () => clearInterval(timer);
-    }, [count]);
+    //const getColor = (mensaje) => resultPaint[mensaje] || { color: "#db2c2cff", type: 3 };
 
-    const [message, setMessage] = useState(null);
+    const resultPaint = {
+        0: "#13e266ff",   // Validación correcta y autorizada
+        901: "#db2c2cff", // No es código QR emitido por el servicio Conecta AIFA QR
+        902: "#db2c2cff", // QR no es válido, los datos contenidos son incorrectos
+        903: "#db2c2cff", // QR no encontrado
+        904: "#db2c2cff", // El QR ya expiró y no se puede utilizar
+        905: "#db2c2cff", // Código QR ya fue registrado en esta plaza para este sentido
+        906: "#db2c2cff", // La clase vehicular no corresponde a un automóvil
+        907: "#db2c2cff", // Código QR registrado en otro carril/ sentido y aún no transcurre el tiempo de tolerancia
+        908: "#db2c2cff", // El QR aun no inicia su vigencia
+        909: "#db2c2cff", // El QR fue utilizado en otra plaza con una diferencia de tiempo inconsistente
+        404: "#ea7712ff", // Error al validar el vuelo
+    }
 
-    const getCheckFlight = async (data, user) => {
-        console.log("🚀 ~ getCheckFlight ~ data:", data)
+    const getCheckFlight = async () => {
         try {
-            const { fetch, error } = await checkFlight({ data, user, _place });
-            console.log("🚀 ~ getCheckFlight ~ response:", fetch)
-            if (fetch) {
+            const { fetch, error, status, json } = await checkFlight({
+                qr: _text,
+                claseVehicular: "",
+                plate: "",
+                idCarril,
+                sentido,
+                token
+            });
+            console.log("🚀 ~ getCheckFlight ~ response:", fetch);
+            //Alert.alert('Resuyl: ' + status, JSON.stringify(fetch, null, 4));
+            //const { color, type } = getColor(fetch?.mensaje);
+
+            if (status === 200) {
+                const codigoRespuesta = fetch?.codigoRespuesta;
                 setMessage({
-                    type: 1,
-                    title: 'Código QR válido',
-                    message: 'Aplique el descuento correspondiente',
-                    color: '#13e266ff'
+                    type: codigoRespuesta,
+                    mensaje: fetch?.mensaje,
+                    idQr: fetch?.idQr,
+                    color: resultPaint[codigoRespuesta] || "#db2c2cff",
+
                 })
-                setType(1)
-            } else {
-                setMessage({
-                    type: 2,
-                    title: 'Código QR inválido',
-                    message: 'Datos inválidos o no encontrados',
-                    color: '#db2c2cff'
-                })
-                setType(2)
-            }
-            if (error) {
-                setMessage({
-                    type: 3,
-                    title: 'Ocurrió un error',
-                    message: 'Intenta nuevamente más tarde',
-                    color: '#db2c2cff'
-                })
-                setType(3)
-                setCount(3);
             }
         } catch (error) {
             console.log("🚀 ~ getCheckFlight ~ error:", error)
         }
     }
 
-    const goBack = () => {
-        navigation.goBack();
-    }
+    const goBack = () => navigation.goBack();
 
     return (
         <View style={styles.container}>
-            <StatusBar style={!type ? "light" : "dark"} />
-            <View style={{
-                flex: 1,
-                justifyContent: 'center',
-                alignItems: 'center',
-                width: '100%',
-                backgroundColor: type ? 'white' : '#1f87d0ff'
-            }}>
-                {type ? <>
-                    <Image
-                        source={image[message?.type]}
-                        style={{ width: 125, height: 125 }}
-                        resizeMode="contain"
-                        loop={false}
-                    />
-                    {type == 1 && (
+            <StatusBar style={"dark"} />
+            <SafeAreaView style={{ flex: 1 }}>
+                <View style={{
+                    flex: 1,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    width: '100%',
+                    backgroundColor: typeof mensaje?.type === 'number' ? mensaje?.color : '#1f87d0ff'
+                }}>
+                    {(typeof mensaje?.type === 'number') ? <>
+                        <Image
+                            source={image[mensaje?.type]}
+                            style={{ width: 125, height: 125 }}
+                            resizeMode="contain"
+                            loop={false}
+                        />
+                        {/*type == 1 && (
                         <View>
                             <Badge
                                 style={{
                                     paddingHorizontal: 15,
                                     fontSize: 14,
                                     backgroundColor: 'transparent',
-                                    color: message?.color,
-                                    borderColor: message?.color,
+                                    color: mensaje?.color,
+                                    borderColor: mensaje?.color,
                                     borderWidth: 1,
                                 }}
                             >
                                 {filtrarTexto(_data?._routing)}
                             </Badge>
                         </View>
-                    )
+                    )*/}
+                        <Text style={{ fontSize: 30, color: "white", fontWeight: '900', textAlign: 'center', marginHorizontal: 20 }}>{mensaje?.mensaje}</Text>
+                        {mensaje?.idQr &&
+                            <Text style={{ fontSize: 25, color: "white", textAlign: 'center', paddingVertical: 20 }}>
+                                ID único:
+                                <Text style={{ fontWeight: '900' }}> {mensaje?.idQr}</Text>
+                            </Text>
+                        }
 
-                    }
-                    <Text style={{ fontSize: 15, padding: 20, color: message?.color, textAlign: 'center' }}>{message?.message}</Text>
-                    <Text style={{ fontSize: 25, color: message?.color, textAlign: 'center' }}>{message?.title}</Text>
-                    <Button
-                        mode="contained"
-                        buttonColor={message?.color}
-                        compact={false}
-                        onPress={() => {
-                            goBack();
-                        }}
-                        style={{ marginTop: 200 }}>
-                        {type === 3 ? `Reintentar (${count})` : `Aceptar (${count})`}
-                    </Button>
-                </>
-                    : <>
-                        <ActivityIndicator
-                            animating={true}
-                            size={60}
-                            color="#ffffffff"
-                            style={{ marginVertical: 20 }}
-                        />
-                        <Text style={styles.subtitle}>Por favor espera un momento {"\n"} mientras validamos</Text>
-                        <Text style={styles.title}>Analizando {"\n"}código QR</Text>
+                        <Button
+                            mode="contained"
+                            buttonColor={'white'}
+                            compact={false}
+                            onPress={goBack}
+                            style={{ marginTop: 150, backgroundColor: 'black' }}>
+                            {mensaje?.type !== 1 ? `Reintentar` : `Aceptar`}
+                        </Button>
                     </>
-                }
-            </View>
+                        : <>
+                            <ActivityIndicator
+                                animating={true}
+                                size={60}
+                                color="#ffffffff"
+                                style={{ marginVertical: 20 }}
+                            />
+                            <Text style={styles.subtitle}>Por favor espera un momento {"\n"} mientras validamos</Text>
+                            <Text style={styles.title}>Analizando {"\n"}código QR</Text>
+                        </>
+                    }
+                </View>
+            </SafeAreaView>
         </View>
     );
 }
@@ -185,17 +186,15 @@ export default function Check({ navigation, route }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     title: {
-        fontSize: 22,
+        fontSize: 26,
         fontWeight: 'bold',
         color: '#ffffffff',
 
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: 20,
         color: '#ffffffff',
         textAlign: 'center',
         padding: 20

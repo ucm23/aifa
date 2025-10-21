@@ -1,22 +1,23 @@
-import React, { useState, useContext, useEffect, } from 'react';
+import React, { useState, useContext, useEffect, useRef, useCallback, } from 'react';
 import { Text, View, Image, Alert, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import ActivityIndicatorLoading from '../../components/ActivityIndicatorLoading';
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { StatusBar } from 'expo-status-bar';
-import { login, useAuthentificationLogged } from '../../api/login';
+import { getData, login, saveDataLogin, useAuthentificationLogged } from '../../api/login';
 import { Button, Switch } from 'react-native-paper';
-import { connect, } from "react-redux";
-
+import { useForm, Controller } from "react-hook-form";
 import image from '../../image/gifs/permissions.gif';
-import aifa from '../../image/aifa.png';
+import aifa from '../../image/conectaifa.png';
+import TextInputCustomL from '../../components/TextInputCustomL';
+import { TextInput } from 'react-native-paper';
+import * as Updates from 'expo-updates';
 
-function flexiblePatternValidation(text) {
+/*function flexiblePatternValidation(text) {
     console.log("🚀 ~ flexiblePatternValidation ~ text:", text)
     const regex = /^(\d+)\s*-\s*(\d+)\s*-\s*(\d+)\s*-\s*([A-Za-zÁÉÍÓÚáéíóúñÑ\s]+)$/;
     const match = text.match(regex);
-
     if (match) {
-
         const data = {
             id: parseInt(match[2].trim()) - 200,
             dealership: parseInt(match[1].trim()) - 100,
@@ -26,13 +27,41 @@ function flexiblePatternValidation(text) {
         console.log("🚀 ~ flexiblePatternValidation ~ data:", JSON.stringify(data, null, 4))
         return data
     }
-
     return { isValid: false };
-}
+}*/
+
+
 
 const Login = ({ navigation, openSession, route }) => {
 
     //const { username } = route.params;
+
+    const [updating, setUpdating] = useState(false);
+
+    useEffect(() => {
+        checkAndUpdate();
+    }, []);
+
+    const checkAndUpdate = async () => {
+        setUpdating(false);
+        try {
+            const update = await Updates.checkForUpdateAsync();
+
+            if (update?.isAvailable) {
+                console.log("🔄 Nueva actualización disponible. Descargando...");
+                await Updates.fetchUpdateAsync();
+                console.log("✅ Actualización descargada. Reiniciando app...");
+                setUpdating(true);
+                await Updates.reloadAsync();
+            } else {
+                console.log("🚀 La app ya está actualizada.");
+            }
+        } catch (error) {
+            console.log("⚠️ Error verificando actualizaciones:", error);
+        } finally {
+            setUpdating(true);
+        }
+    };
 
     useEffect(() => {
         navigation.setOptions({
@@ -44,6 +73,15 @@ const Login = ({ navigation, openSession, route }) => {
         });
     }, [navigation]);
 
+    const { control, handleSubmit, touched, formState: { errors } } = useForm({
+        defaultValues: {
+            //email: 'pachuca@aifapass-e.com', password: 'Password6',
+            //email: 'penon@aifapass-e.com', password: 'Password66',
+            //email: 'santa_ines@aifapass-e.com', password: 'Password31',
+            email: '', password: '',
+        },
+    });
+
     const { get_last_login, login_offline } = useAuthentificationLogged();
 
     useEffect(() => {
@@ -54,14 +92,44 @@ const Login = ({ navigation, openSession, route }) => {
         setLoaderUserLogged(false)
         try {
             let { data, status } = await get_last_login()
-            if (status) {
-                let { id, dealership } = data;
-                const response = await login_offline({ id, dealership })
-                if (response?.status) {
-                    openSession('INFO', response?.data)
-                    navigation.replace('Home', { user: response?.data });
-                }
-            } else setLoaderUserLogged(true)
+            switch (status) {
+                case 1:
+                    let user__ = await getData('user');
+                    console.log("🚀 ~ checkFlight ~ user__:", user__)
+                    let lane__ = await getData('lane');
+                    console.log("🚀 ~ checkFlight ~ lane__:", lane__)
+                    navigation.replace('Home', {
+                        user: user__,
+                        lane: lane__
+                    });
+                    break;
+                case true:
+                    let { email, password, id, id_, place_id } = data;
+                    const response = await login_offline({ email, password })
+                    console.log("🚀 ~ login_user_loggend ~ response:", response?.data)
+                    if (response?.status) {
+                        //openSession('INFO', response?.data)
+                        const lanesArray = JSON.parse(response?.data?.lanes);
+                        let lane = lanesArray.find(lane =>
+                            lane.direction === response?.data?.direction_active && lane.id.toString() === response?.data?.lane_active
+                        );
+                        navigation.replace('Home', {
+                            user: {
+                                ...response?.data,
+                                user: {
+                                    id: response?.data?.id,
+                                    name: response?.data?.name,
+                                    place_id
+                                }
+                            },
+                            lane
+                        });
+                    }
+                    break;
+                case false:
+                    setLoaderUserLogged(true)
+                    break;
+            }
         } catch (error) {
             console.error("login_user_loggend ~ error", error)
         } finally {
@@ -69,33 +137,25 @@ const Login = ({ navigation, openSession, route }) => {
         }
     }
 
-    const [loaderUserLogged, setLoaderUserLogged] = useState(false);
+    const [loaderUserLogged, setLoaderUserLogged] = useState(true);
     const [bandera, setBandera] = useState(true)
-    const [isScanning, setIsScanning] = useState(true);
+    //const [isScanning, setIsScanning] = useState(true);
     const [permission, requestPermission] = useCameraPermissions();
+    const [verifyCode, setVerifyCode] = useState(false);
 
-    let lastScannedTime = 0;
-    const SCAN_DELAY = 2000;
+    const [eye, setEye] = useState(true)
 
-    const handleBarcodeScanned = (result) => {
+    //let lastScannedTime = 0;
+    //const SCAN_DELAY = 2000;
+
+    /*const handleBarcodeScanned = (result) => {
         const currentTime = Date.now();
-
-        // Evitar escaneos demasiado rápidos
-        if (currentTime - lastScannedTime < SCAN_DELAY || !isScanning) {
-            return;
-        }
-
+        if (currentTime - lastScannedTime < SCAN_DELAY || !isScanning) return;
         lastScannedTime = currentTime;
-        console.log("🚀 ~ handleBarcodeScanned ~ result:", result);
-
         setIsScanning(false);
-
         if (result?.data || result?.raw) {
             const data = flexiblePatternValidation(result?.data || '');
-            console.log("🚀 ~ handleBarcodeScanned ~ data:", data)
             const raw = flexiblePatternValidation(result?.raw || '');
-            console.log("🚀 ~ handleBarcodeScanned ~ raw:", raw)
-
             if (data.isValid) {
                 const datos = { id: data?.id, dealership: data?.dealership };
                 onSubmit(datos);
@@ -110,26 +170,106 @@ const Login = ({ navigation, openSession, route }) => {
             }
         }
         setTimeout(() => setIsScanning(true), 1500);
-    };
+    };*/
 
-    async function* mode_loguers(data) {
+
+    /*async function* mode_loguers(data) {
         yield await login(data);
-        yield await login_offline(data);
+        //yield await login_offline(data);
+    };*/
+
+    const validateEmail = (email) => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
     };
 
     const onSubmit = async (data) => {
-        //console.log("🚀🚀🚀🚀🚀 ~ onSubmit ~ data:", JSON.stringify(data, null, 5))
+        console.log("🚀🚀🚀🚀🚀 ~ onSubmit ~ data:", JSON.stringify(data, null, 5))
         setBandera(false)
+        if (!validateEmail(data?.email.trim())) {
+            Alert.alert('Correo inválido', 'Verifica el formato del correo electrónico.');
+            setBandera(true)
+            return;
+        }
         try {
-            const get_data = mode_loguers({ ...data })
+            let response = await login(data);
+            //console.log("🚀 ~ onSubmit ~ response:", response?.data)
+            if (response?.status == 1) {
+                let responseLocal = await saveDataLogin({
+                    response_data: response.data,
+                    email: data.email,
+                    password: data.password,
+                    login: true
+                })
+                //console.log("🚀 ~ onSubmit ~ responseLocal:", responseLocal)
+                let place_id = parseInt(response?.data?.user?.place_id) || 0;
+                //console.error("🚀 ~ onSubmit ~ place_id:", place_id)
+
+                // ALEATICA
+                if ([11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 31].includes(place_id)) {
+                    navigation.navigate('DirectionLanes', {
+                        actives: response?.data?.lanes,
+                        user: response?.data,
+                        save: responseLocal.status,
+                        email: data.email,
+                        password: data.password,
+                        mode: 1
+                    });
+                    return;
+                }
+
+                // IDEAL
+                if ([1, 2, 3].includes(place_id)) {
+                    /*const grouped = response?.data?.lanes.reduce((acc, lane) => {
+                        if (!acc[lane.direction]) {
+                            acc[lane.direction] = [];
+                        }
+                        acc[lane.direction].push(lane);
+                        return acc;
+                    }, {});
+                    const result = Object.entries(grouped).map(([direction, items]) => ({
+                        name: direction,
+                        lanes: items
+                    }));*/
+                    navigation.navigate('DirectionLanes', {
+                        actives: response?.data?.lanes,
+                        user: response?.data,
+                        save: responseLocal.status,
+                        email: data.email,
+                        password: data.password,
+                        mode: 1
+                    });
+                    return;
+                }
+
+                // PINFRA
+                if ([21, 22, 23, 24, 25, 26, 27, 28, 29].includes(place_id)) {
+                    navigation.navigate('DirectionLanes', {
+                        actives: response?.data?.lanes,
+                        user: response?.data,
+                        save: responseLocal.status,
+                        email: data.email,
+                        password: data.password,
+                        mode: 1
+                    });
+                    return;
+                }
+                //const grouped = Object.groupBy(response?.data?.lanes, lane => lane.direction);
+                //setDirections(grouped)
+
+                //openSession('INFO', result_data?.value?.data)
+            } else {
+                Alert.alert("Error", "Verifica credenciales")
+            }
+            /*const get_data = mode_loguers({ ...data })
             let result_data = await get_data.next()
             //if (result_data?.value?.status === 0) Alert.alert('Verificación incorrecta', 'Vuelve a intentarlo / introduzca los datos correctamente.');
             if (result_data?.value?.status === 1) {
                 result_data = await get_data.next()
-                openSession('INFO', result_data?.value?.data)
+                //openSession('INFO', result_data?.value?.data)
                 console.log("🚀 ~ onSubmit ~ result_data?.data:", result_data?.value?.data)
                 navigation.navigate('Home', { user: result_data?.value?.data });
-            }
+            }*/
         } catch (error) {
             console.log("🚀 ~ file: Login.js:89 ~ onSubmit ~ error:", error)
         } finally {
@@ -139,6 +279,15 @@ const Login = ({ navigation, openSession, route }) => {
 
     const [isSwitchOn, setIsSwitchOn] = useState(false);
     const onToggleSwitch = () => setIsSwitchOn(!isSwitchOn);
+
+    if (!updating) {
+        return (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ marginTop: 10, color: 'gray' }}>Verificando actualizaciones...</Text>
+            </View>
+        );
+    }
+
 
     if (!permission) {
         return (
@@ -150,37 +299,29 @@ const Login = ({ navigation, openSession, route }) => {
 
     if (!permission?.granted) {
         return (
-            <View style={{ flex: 1, width: '100%', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 0 }}>
+            <SafeAreaView style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, backgroundColor: 'white' }}>
                 <Image
                     source={aifa}
-                    style={{ width: 200 }}
+                    style={{ height: 120, marginVertical: 30 }}
                     resizeMode="contain"
                 />
                 <View style={{ flex: 1, width: '100%', alignItems: 'center' }}>
-                    <Image
-                        source={image}
-                        style={{ width: 222, height: 222 }}
-                        resizeMode="contain"
-                        loop={true}
-                    />
-
-                    <Text style={{ color: '#1f87d0ff', width: '100%', fontWeight: 'bold', paddingBottom: 15 }}>Paso 1</Text>
-                    <Text style={{ fontSize: 30, color: 'black', width: '100%', fontWeight: 'bold' }}>
+                    <Text style={{ color: '#1f87d0ff', width: '100%', fontWeight: 'bold' }}>Paso 1</Text>
+                    <Text style={{ fontSize: 26, color: 'black', width: '100%', fontWeight: 'bold' }}>
                         Permiso para usar la cámara
                     </Text>
-                    <Text style={{ fontSize: 15, color: 'gray', paddingVertical: 20, width: '100%' }}>
-                        Necesitamos acceso a tu cámara para escanear códigos QR y brindarte un servicio más rápido y eficiente.
+                    <Text style={{ fontSize: 16, color: 'gray', paddingVertical: 15, width: '100%' }}>
+                        Otorga acceso a la cámara para escanear códigos QR's.
                     </Text>
-
                     <View
                         style={{
-                            padding: 25,
+                            padding: 10, paddingHorizontal: 20,
                             backgroundColor: '#B6B6B680',
                             borderRadius: 10, flexDirection: 'row', justifyContent: 'space-between',
                             alignItems: 'center',
                             width: '100%',
                         }} >
-                        <Text>Autorizo usar la cámara</Text>
+                        <Text onPress={onToggleSwitch}>Autorizo usar la cámara</Text>
                         <Switch value={isSwitchOn} onValueChange={onToggleSwitch} />
                     </View>
                 </View>
@@ -188,19 +329,68 @@ const Login = ({ navigation, openSession, route }) => {
                     onPress={() => requestPermission()}
                     mode='contained'
                     disabled={!isSwitchOn}
-                    style={{ marginBottom: 20, width: '100%', borderRadius: 10 }}
+                    style={{ marginBottom: 3, width: '100%', borderRadius: 10 }}
                 >
                     Continuar
                 </Button>
-            </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        loaderUserLogged ?
+        !loaderUserLogged ? <ActivityIndicatorLoading label={true} /> :
             <View style={styles.container}>
                 <StatusBar style={'dark'} />
-                <CameraView
+                <SafeAreaView style={{ backgroundColor: 'white', flex: 1, padding: 12 }}>
+                    <View style={{ alignItems: 'center', }}>
+                        <Image
+                            source={aifa}
+                            style={styles.imageTop}
+                            resizeMode="contain"
+                        />
+                    </View>
+                    <Text style={{ fontWeight: 'bold', fontSize: 20, color: "#343434ff", textAlign: 'center', marginTop: 5 }}>Iniciar sesión</Text>
+                    <Text style={{ color: "#343434ff", textAlign: 'center', }}>Inicia sesión con tus credenciales</Text>
+                    <Text style={{ fontSize: 7, textAlign: 'center', paddingBottom: 25 }}>3.0.0</Text>
+
+                    <View>
+                        <Text style={{ color: "#343434ff", marginLeft: 10 }}>Correo electrónico</Text>
+                        <Controller control={control} name="email"
+                            render={({ field: { onChange, value } }) => (
+                                <TextInputCustomL
+                                    placeholder={'Ingrese correo electrónico'} onChangeText={onChange} value={value}
+                                    autoComplete="email"
+                                    keyboardType="email-address"
+                                    textContentType="emailAddress"
+                                    importantForAutofill="yes"
+                                />
+                            )}
+                        />
+                        <Text style={{ color: "#343434ff", marginLeft: 10, marginTop: 15 }}>Contraseña</Text>
+                        <Controller control={control} name="password"
+                            render={({ field: { onChange, value } }) => (
+                                <TextInputCustomL
+                                    placeholder={'Ingrese la contraseña'} onChangeText={onChange} value={value} secureTextEntry={eye}
+                                    autoComplete="password"
+                                    textContentType="password"
+                                    importantForAutofill="yes"
+                                    right={<TextInput.Icon size={18} color={'gray'} icon={eye ? 'eye-outline' : 'eye-off-outline'} onPress={() => setEye(!eye)} />} />
+                            )}
+                        />
+                    </View>
+
+                    <View style={{ paddingTop: 15 }}>
+                        <Button
+                            loading={!bandera} disabled={!bandera} uppercase={false} onPress={handleSubmit(onSubmit)} mode='contained'
+                            style={{ borderRadius: 50, }}
+                            labelStyle={{ fontWeight: '400', textAlignVertical: 'center', fontSize: 16 }}
+                            compact={false}
+                        >
+                            {bandera ? 'Iniciar sesión' : 'Comprobando'}
+                        </Button>
+                    </View>
+                </SafeAreaView>
+                {/*<CameraView
                     style={styles.camera}
                     facing="back"
                     barcodeScannerSettings={{
@@ -221,9 +411,8 @@ const Login = ({ navigation, openSession, route }) => {
                     <View style={styles.cornerBottomLeft} />
                     <View style={styles.cornerBottomRight} />
                     <Text style={styles.instructionText}>Encuadre el código QR para {isScanning ? 'I' : '1'}NICIAR SESIÓN</Text>
-                </View>
+                </View>*/}
             </View>
-            : <ActivityIndicatorLoading label={true} />
     );
 };
 
@@ -239,7 +428,10 @@ const mapDispatchToProps = dispatch => ({
 });
 
 
-export default connect(mapStateToProps, mapDispatchToProps)(Login);
+//export default connect(mapStateToProps, mapDispatchToProps)(Login);
+
+export default Login;
+
 
 
 
@@ -266,12 +458,9 @@ const styles = StyleSheet.create({
         left: '5%',
     },
     imageTop: {
-        position: 'absolute',
-        bottom: -200,
-        left: 0,
-        right: 0,
         width: '100%',
-        height: 50,
+        height: 75,
+        marginTop: 45,
     },
     cornerTopLeft: {
         position: 'absolute',
